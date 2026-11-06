@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+myenv/
+*.egg-info/
+
+# Env / secrets
+.env
+
+# Database
+backend/data/
+backend/ctip.db
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# Logs
+*.log

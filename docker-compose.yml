@@ -1,0 +1,21 @@
+services:
+  ctip:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    image: ctip:latest
+    container_name: ctip
+    ports:
+      - "8000:8000"
+    environment:
+      - CTIP_ENV=production
+      - CTIP_DEMO_MODE=true
+      - CTIP_FEED_REFRESH_MINUTES=10
+      - CTIP_CVE_REFRESH_MINUTES=60
+      - CTIP_CORS_ORIGINS=*
+    volumes:
+      - ctip_data:/app/backend/data
+    restart: unless-stopped
+
+volumes:
+  ctip_data:
