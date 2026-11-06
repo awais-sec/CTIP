@@ -118,6 +118,16 @@ docker compose up --build
 
 Open **http://localhost:8000**.
 
+The Dockerfile copies both `backend/` and the sibling `frontend/` directory, so
+direct builds must use the repository root as the build context:
+
+```bash
+docker build -f backend/Dockerfile -t ctip .
+```
+
+Do not use `backend/` as the final argument to `docker build`; that context
+does not contain `frontend/` and produces a `"/frontend": not found` error.
+
 ### Option B — Local Python
 
 ```bash
