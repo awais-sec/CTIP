@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#0f1117" />
+<title>CTIP — Cyber Threat Intelligence Platform</title>
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+<meta name="description" content="Live cyber threat intelligence dashboard: real-time IOC feed, global threat map, MITRE ATT&CK mapping, and CVE watchlist." />
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="css/style.css?v=8" />
+</head>
+<body>
+
+<!-- Inline icon sprite — hand-drawn stroke icons, no external icon library
+     or emoji anywhere in this dashboard. -->
+<svg style="display:none" aria-hidden="true">
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 2 L20 6 V11 C20 16.2 16.4 20.6 12 22 C7.6 20.6 4 16.2 4 11 V6 Z"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 2 L22.5 20.5 H1.5 Z"/><line x1="12" y1="9" x2="12" y2="13.5"/><circle cx="12" cy="17" r="0.9" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><line x1="3" y1="12" x2="21" y2="12"/></symbol>
+  <symbol id="i-activity" viewBox="0 0 24 24"><polyline points="2,13 6.5,13 9.5,20.5 14,3.5 17,13 22,13"/></symbol>
+  <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5.2"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-bug" viewBox="0 0 24 24"><ellipse cx="12" cy="13.5" rx="5" ry="6.5"/><line x1="9.5" y1="4" x2="8" y2="2"/><line x1="14.5" y1="4" x2="16" y2="2"/><line x1="7" y1="9" x2="3" y2="7"/><line x1="7" y1="13.5" x2="2.5" y2="13.5"/><line x1="7" y1="18" x2="3" y2="20"/><line x1="17" y1="9" x2="21" y2="7"/><line x1="17" y1="13.5" x2="21.5" y2="13.5"/><line x1="17" y1="18" x2="21" y2="20"/><line x1="12" y1="7" x2="12" y2="20"/></symbol>
+  <symbol id="i-server" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="7"/><rect x="2" y="14" width="20" height="7"/><line x1="6" y1="6.5" x2="6.01" y2="6.5"/><line x1="6" y1="17.5" x2="6.01" y2="17.5"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 6.5-2.5 8.5-2.5 8.5h17S18 14.5 18 8Z"/><path d="M13.7 20.5a2 2 0 0 1-3.4 0"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="7.5"/><line x1="21" y1="21" x2="15.8" y2="15.8"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M20 15.5v3a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-3"/><polyline points="7,10.5 12,15.5 17,10.5"/><line x1="12" y1="15.5" x2="12" y2="2.5"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></symbol>
+  <symbol id="i-network" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2.4"/><circle cx="5" cy="18" r="2.4"/><circle cx="19" cy="18" r="2.4"/><circle cx="12" cy="12.5" r="1.8"/><line x1="12" y1="7.4" x2="12" y2="10.7"/><line x1="10.4" y1="13.6" x2="6.6" y2="16.7"/><line x1="13.6" y1="13.6" x2="17.4" y2="16.7"/></symbol>
+</svg>
+
+<canvas id="ambientCanvas" aria-hidden="true"></canvas>
+
+<header class="topbar">
+  <div class="brand">
+    <svg class="icon brand-mark" aria-hidden="true"><use href="#i-shield"/></svg>
+    <div class="brand-text">
+      <span class="brand-name">CTIP<span class="acc">.</span></span>
+      <span class="brand-sub">Cyber Threat Intelligence Platform</span>
+    </div>
+  </div>
+
+  <div class="search-wrap">
+    <svg class="icon search-icon" aria-hidden="true"><use href="#i-search"/></svg>
+    <input id="search-input" type="text" placeholder="Search IOC, malware family, CVE ID…" autocomplete="off" />
+    <div id="search-results" class="search-results hidden"></div>
+  </div>
+
+  <div class="topbar-right">
+    <button id="export-csv" class="btn btn-ghost" title="Export current threat data as CSV">
+      <svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>
+      Export CSV
+    </button>
+    <div id="live-pill" class="live-pill">
+      <span class="live-dot"></span>
+      <span id="live-pill-text">CONNECTING…</span>
+    </div>
+  </div>
+</header>
+
+<div id="demo-banner" class="demo-banner hidden">
+  <svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg>
+  <span>DEMO MODE — some or all indicators below are synthetically generated for demonstration. Configure live feeds in <code>.env</code> to ingest real threat intelligence.</span>
+</div>
+
+<main class="dashboard">
+
+  <section class="stat-row" id="stat-row">
+    <div class="stat-card" data-stat="total_iocs">
+      <span class="stat-label">Tracked Indicators</span>
+      <span class="stat-value">—</span>
+      <span class="stat-foot">All time</span>
+    </div>
+    <div class="stat-card" data-stat="active_last_24h">
+      <span class="stat-label">Active (24h)</span>
+      <span class="stat-value">—</span>
+      <span class="stat-foot">Last 24 hours</span>
+    </div>
+    <div class="stat-card stat-critical" data-stat="critical_count">
+      <span class="stat-label">Critical Severity</span>
+      <span class="stat-value">—</span>
+      <span class="stat-foot">Needs attention</span>
+    </div>
+    <div class="stat-card" data-stat="countries_affected">
+      <span class="stat-label">Countries Affected</span>
+      <span class="stat-value">—</span>
+      <span class="stat-foot">Origin geography</span>
+    </div>
+    <div class="stat-card" data-stat="kev_count">
+      <span class="stat-label">Known Exploited CVEs</span>
+      <span class="stat-value">—</span>
+      <span class="stat-foot">CISA KEV catalog</span>
+    </div>
+  </section>
+
+  <section class="main-grid">
+    <div class="panel map-panel">
+      <div class="panel-head">
+        <h2><svg class="icon" aria-hidden="true"><use href="#i-globe"/></svg>Global Threat Map</h2>
+        <div class="legend">
+          <span class="legend-item"><i class="dot dot-critical"></i>Critical</span>
+          <span class="legend-item"><i class="dot dot-high"></i>High</span>
+          <span class="legend-item"><i class="dot dot-medium"></i>Medium</span>
+          <span class="legend-item"><i class="dot dot-low"></i>Low</span>
+        </div>
+      </div>
+      <div id="map" class="map"></div>
+      <svg class="radar-sweep" viewBox="0 0 100 100" aria-hidden="true">
+        <circle cx="50" cy="50" r="48" class="radar-ring" />
+        <circle cx="50" cy="50" r="32" class="radar-ring" />
+        <circle cx="50" cy="50" r="16" class="radar-ring" />
+        <line x1="50" y1="50" x2="50" y2="2" class="radar-sweep-line" />
+      </svg>
+    </div>
+
+    <div class="panel feed-panel">
+      <div class="panel-head">
+        <h2><svg class="icon" aria-hidden="true"><use href="#i-activity"/></svg>Live Threat Feed</h2>
+        <span class="panel-head-sub" id="feed-count-label">0 events</span>
+      </div>
+      <div class="filter-bar">
+        <select id="filter-severity" class="filter-select">
+          <option value="">All Severities</option>
+          <option value="critical">Critical</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+        </select>
+        <select id="filter-type" class="filter-select">
+          <option value="">All Types</option>
+        </select>
+        <button id="filter-clear" class="filter-clear" title="Clear filters">
+          <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
+        </button>
+      </div>
+      <div id="feed-list" class="feed-list"></div>
+    </div>
+  </section>
+
+  <section class="main-grid campaign-grid">
+    <div class="panel campaign-graph-panel">
+      <div class="panel-head">
+        <h2><svg class="icon" aria-hidden="true"><use href="#i-network"/></svg>Threat Campaigns</h2>
+        <span class="panel-head-sub" id="campaign-count-label">0 clusters</span>
+      </div>
+      <div id="campaign-graph-wrap" class="campaign-graph-wrap">
+        <svg id="campaign-graph" class="campaign-graph"></svg>
+      </div>
+    </div>
+
+    <div class="panel campaign-list-panel">
+      <div class="panel-head">
+        <h2>Inferred Clusters</h2>
+        <span class="panel-head-sub">Family / infrastructure</span>
+      </div>
+      <div id="campaign-list" class="campaign-list"></div>
+    </div>
+  </section>
+
+  <section class="charts-grid">
+    <div class="panel">
+      <div class="panel-head"><h2>Severity Trend</h2></div>
+      <canvas id="chart-trend" height="180"></canvas>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>Threat Types</h2></div>
+      <canvas id="chart-types" height="180"></canvas>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>Top Source Countries</h2></div>
+      <canvas id="chart-countries" height="180"></canvas>
+    </div>
+  </section>
+
+  <section class="lower-grid">
+    <div class="panel mitre-panel">
+      <div class="panel-head">
+        <h2><svg class="icon" aria-hidden="true"><use href="#i-target"/></svg>MITRE ATT&CK Coverage</h2>
+        <span class="panel-head-sub">Tactics observed</span>
+      </div>
+      <div id="mitre-matrix" class="mitre-matrix"></div>
+    </div>
+
+    <div class="panel cve-panel">
+      <div class="panel-head">
+        <h2><svg class="icon" aria-hidden="true"><use href="#i-bug"/></svg>CVE Watchlist</h2>
+        <label class="toggle">
+          <input type="checkbox" id="kev-only-toggle" />
+          <span>KEV only</span>
+        </label>
+      </div>
+      <div id="cve-list" class="cve-list"></div>
+    </div>
+  </section>
+
+  <section class="lower-grid">
+    <div class="panel">
+      <div class="panel-head">
+        <h2><svg class="icon" aria-hidden="true"><use href="#i-server"/></svg>Feed Health</h2>
+      </div>
+      <div id="feed-status" class="feed-status"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head">
+        <h2><svg class="icon" aria-hidden="true"><use href="#i-bell"/></svg>Alert History</h2>
+      </div>
+      <div id="alert-history" class="alert-history"></div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <span class="footer-brand">CTIP<span class="acc">.</span></span>
+  <span class="footer-center">Built on live OSINT feeds — abuse.ch URLhaus/ThreatFox/MalwareBazaar, CISA KEV, NVD</span>
+  <a href="/docs" target="_blank" rel="noopener" class="footer-link">API Docs</a>
+</footer>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+<script src="js/ambient.js?v=8"></script>
+<script src="js/api.js?v=8"></script>
+<script src="js/map.js?v=8"></script>
+<script src="js/charts.js?v=8"></script>
+<script src="js/feed.js?v=8"></script>
+<script src="js/campaigns.js?v=8"></script>
+<script src="js/app.js?v=8"></script>
+</body>
+</html>
